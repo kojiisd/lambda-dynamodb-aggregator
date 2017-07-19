@@ -2,6 +2,7 @@ import sys
 import boto3
 import json
 import decimal
+import os
 from boto3.dynamodb.conditions import Key
 
 from aggregator.lambda_aggregator import LambdaAggregator
@@ -13,7 +14,7 @@ from aggregator.avg_aggregator import AvgAggregator
 from aggregator.count_aggregator import CountAggregator
 
 dynamodb = boto3.resource('dynamodb')
-table    = dynamodb.Table('test')
+table    = dynamodb.Table(os.environ['TABLE'])
 
 aggregator_map = {}
 aggregator_map['latest'] = LatestAggregator()
@@ -25,15 +26,18 @@ aggregator_map['count'] = CountAggregator()
 
 def run(event, context):
     check_params(event)
+    result = []
+    
+    for id in event['id']:
+        res = table.query(
+                KeyConditionExpression=Key(event['label_id']).eq(id) & Key(event['label_range']).between(event['time_from'], event['time_to']),
+                ScanIndexForward=False
+            )
 
-    res = table.query(
-            KeyConditionExpression=Key(event['label_id']).eq(event['id']) & Key(event['label_range']).between(event['time_from'], event['time_to']),
-            ScanIndexForward=False
-        )
+        return_response = aggregator_map[event['aggregator']].aggregate(res['Items'], event['params'])
+        result.append(return_response)
 
-    return_response = aggregator_map[event['aggregator']].aggregate(res['Items'], event['params'])
-
-    return json.dumps(return_response, default=decimal_default)
+    return json.dumps(result, default=decimal_default)
 
 def decimal_default(obj):
     if isinstance(obj, decimal.Decimal):
