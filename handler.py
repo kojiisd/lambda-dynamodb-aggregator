@@ -33,7 +33,8 @@ def run(event, context):
                 KeyConditionExpression=Key(event['label_id']).eq(id) & Key(event['label_range']).between(event['time_from'], event['time_to']),
                 ScanIndexForward=False
             )
-
+	if len(res['Items']) == 0:
+            continue
         return_response = aggregator_map[event['aggregator']].aggregate(res['Items'], event['params'])
         result.append(return_response)
 
